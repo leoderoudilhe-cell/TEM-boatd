@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#07050a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="TEM" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>TEM 🐜 — Vision Board</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <section id="lockScreen" class="lock-screen hidden" aria-live="polite">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="lock-card">
+        <div class="brand-lock">
+          <span class="brand-mark">🐜</span>
+          <div>
+            <p class="eyebrow">TEM BOARD</p>
+            <h1>Entre dans ta vision</h1>
+          </div>
+        </div>
+
+        <div id="setupPanel" class="hidden">
+          <p class="muted">Crée un mot de passe pour protéger le board. Tu pourras le désactiver plus tard dans les réglages.</p>
+          <label class="field">
+            <span>Mot de passe</span>
+            <input id="setupPassword" type="password" autocomplete="new-password" placeholder="Choisis un mot de passe" />
+          </label>
+          <label class="field">
+            <span>Confirmer</span>
+            <input id="setupPasswordConfirm" type="password" autocomplete="new-password" placeholder="Répète le mot de passe" />
+          </label>
+          <button id="createPasswordBtn" class="primary-btn full">Créer mon TEM</button>
+          <button id="skipPasswordBtn" class="ghost-btn full">Continuer sans mot de passe</button>
+        </div>
+
+        <div id="loginPanel" class="hidden">
+          <p class="muted">Mot de passe activé.</p>
+          <label class="field">
+            <span>Mot de passe</span>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Entre le mot de passe" />
+          </label>
+          <button id="unlockBtn" class="primary-btn full">Déverrouiller</button>
+        </div>
+
+        <p id="lockFeedback" class="feedback"></p>
+      </div>
+    </section>
+
+    <main id="mainApp" class="main-app hidden">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">TEM 🐜</p>
+          <h1 id="greetingTitle">Life Progress Board</h1>
+        </div>
+        <button id="quickAddBtn" class="icon-btn" aria-label="Ajouter">＋</button>
+      </header>
+
+      <section class="hero-card">
+        <div class="hero-bg"></div>
+        <div class="hero-content">
+          <div>
+            <p class="eyebrow">Score global</p>
+            <h2 id="globalScore">0%</h2>
+            <p id="globalMessage" class="muted">Chaque petite action construit la vision.</p>
+          </div>
+          <div class="global-ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" class="ring-bg"></circle>
+              <circle id="ringProgress" cx="60" cy="60" r="50" class="ring-value"></circle>
+            </svg>
+            <span id="ringLabel">0%</span>
+          </div>
+        </div>
+        <div class="neon-line">
+          <span id="globalBar"></span>
+        </div>
+      </section>
+
+      <section id="viewVision" class="view active">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">La Vision</p>
+            <h2>Photos d’objectifs</h2>
+          </div>
+          <button id="addVisionBtn" class="mini-btn">+ photo</button>
+        </div>
+        <p class="hint">Appuie pour ouvrir. Glisse pour déplacer. Appui long pour supprimer. Modifie la taille et le zoom dans le détail.</p>
+        <div id="visionGrid" class="vision-grid"></div>
+      </section>
+
+      <section id="viewObjectives" class="view">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">Les Piliers</p>
+            <h2>Objectifs principaux</h2>
+          </div>
+          <button id="addObjectiveBtn" class="mini-btn">+ objectif</button>
+        </div>
+        <div id="objectivesList" class="objective-list"></div>
+      </section>
+
+      <section id="viewFocus" class="view">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">Mission du moment</p>
+            <h2>Actions à valider</h2>
+          </div>
+          <button id="celebrateBtn" class="mini-btn">boost</button>
+        </div>
+        <div id="focusList" class="focus-list"></div>
+      </section>
+
+      <section id="viewNest" class="view">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">Le Nid</p>
+            <h2>Notes & pensées</h2>
+          </div>
+        </div>
+        <textarea id="globalNotes" class="notes-area" placeholder="Écris ici tes pensées, victoires, idées, rappels..."></textarea>
+        <div class="note-card">
+          <p class="eyebrow">Rituel rapide</p>
+          <div class="ritual-grid">
+            <button data-ritual="Aujourd’hui, je suis fière de : " class="ghost-btn">Fierté</button>
+            <button data-ritual="Ce que je veux améliorer : " class="ghost-btn">Améliorer</button>
+            <button data-ritual="Petite action de demain : " class="ghost-btn">Demain</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="viewSettings" class="view">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">Réglages</p>
+            <h2>Contrôle du board</h2>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-row">
+            <div>
+              <h3>Mot de passe à l’entrée</h3>
+              <p class="muted">Activable ou désactivable. Protection locale simple.</p>
+            </div>
+            <label class="switch">
+              <input id="passwordToggle" type="checkbox" />
+              <span></span>
+            </label>
+          </div>
+          <button id="changePasswordBtn" class="ghost-btn full">Changer le mot de passe</button>
+        </div>
+
+        <div class="settings-card">
+          <h3>Gestion des données</h3>
+          <p class="muted">La V1 sauvegarde sur ce téléphone/navigateur.</p>
+          <div class="stack">
+            <button id="exportBtn" class="ghost-btn full">Exporter mes données</button>
+            <label class="ghost-btn full file-btn">
+              Importer des données
+              <input id="importInput" type="file" accept="application/json" hidden />
+            </label>
+            <button id="resetBtn" class="danger-btn full">Réinitialiser TEM</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav id="bottomNav" class="bottom-nav hidden" aria-label="Navigation">
+      <button data-tab="Vision" class="active"><span>✦</span>Vision</button>
+      <button data-tab="Objectives"><span>◇</span>Piliers</button>
+      <button data-tab="Focus"><span>✓</span>Actions</button>
+      <button data-tab="Nest"><span>☾</span>Nid</button>
+      <button data-tab="Settings"><span>⚙</span>Réglages</button>
+    </nav>
+  </div>
+
+  <div id="sheetBackdrop" class="sheet-backdrop hidden"></div>
+
+  <section id="editorSheet" class="editor-sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div id="sheetContent"></div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="confettiLayer" class="confetti-layer"></div>
+
+  <template id="visionCardTpl">
+    <article class="vision-card" draggable="false">
+      <div class="vision-img-wrap">
+        <img alt="" draggable="false" />
+        <div class="vision-gradient"></div>
+      </div>
+      <div class="vision-card-body">
+        <span class="pill"></span>
+        <h3></h3>
+        <p></p>
+      </div>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
