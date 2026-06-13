@@ -64,11 +64,13 @@
 
       <section class="hero-card">
         <div class="hero-bg"></div>
+        <div class="hero-bg-img" id="heroBgImg"></div>
         <div class="hero-content">
           <div>
             <p class="eyebrow">Score global</p>
             <h2 id="globalScore">0%</h2>
             <p id="globalMessage" class="muted">Chaque petite action construit la vision.</p>
+            <div id="streakBadge" class="streak-badge" style="display:none">🔥 <span class="streak-count">0 jours</span></div>
           </div>
           <div class="global-ring" aria-hidden="true">
             <svg viewBox="0 0 120 120">
@@ -116,6 +118,8 @@
         </div>
         <div id="focusList" class="focus-list"></div>
       </section>
+
+      <section id="viewToday" class="view"></section>
 
       <section id="viewNest" class="view">
         <div class="section-title-row">
@@ -176,6 +180,7 @@
       <button data-tab="Vision" class="active"><span>✦</span>Vision</button>
       <button data-tab="Objectives"><span>◇</span>Piliers</button>
       <button data-tab="Focus"><span>✓</span>Actions</button>
+      <button data-tab="Today"><span>⚡</span>Top 3</button>
       <button data-tab="Nest"><span>☾</span>Nid</button>
       <button data-tab="Settings"><span>⚙</span>Réglages</button>
     </nav>
