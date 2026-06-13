@@ -549,7 +549,7 @@ input[type="range"]{width:100%;accent-color:var(--pink)}
 .vision-viewer-info p{color:rgba(255,255,255,.72);margin:0}
 .vision-viewer-dots{
   position:absolute;
-  bottom:calc(120px + env(safe-area-inset-bottom));
+  bottom:calc(210px + env(safe-area-inset-bottom));
   left:50%;transform:translateX(-50%);
   display:flex;gap:6px;
 }

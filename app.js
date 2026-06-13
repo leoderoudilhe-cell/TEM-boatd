@@ -6,6 +6,7 @@ const SESSION_KEY = "tem-unlocked-session-v1";
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 const uid = (prefix = "id") => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const localDateStr = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
 const TAB_ORDER = ["Vision", "Objectives", "Focus", "Today", "Nest", "Settings"];
 let _currentTabIdx = 0;
@@ -395,10 +396,10 @@ function animateCounter(selector, from, to, duration, suffix = "") {
 // ─── Streak ───────────────────────────────────────────────────────────────────
 
 function updateStreak() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const s = state.streak;
   if (s.lastActiveDay === today) return;
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const yesterday = localDateStr(new Date(Date.now() - 86400000));
   s.count = s.lastActiveDay === yesterday ? (s.count || 0) + 1 : 1;
   s.lastActiveDay = today;
 }
@@ -868,6 +869,7 @@ function confirmDeleteVision(id) {
   if (lastTouchDelete.id === id && now - lastTouchDelete.time < 2500) {
     state.visions = state.visions.filter(v => v.id !== id);
     saveState({ silent: true });
+    document.getElementById("visionViewer")?.remove();
     closeSheet();
     renderAll();
     toast("Photo supprimée.");
@@ -1071,7 +1073,7 @@ function renderToday() {
   const view = $("#viewToday");
   if (!view) return;
 
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const todayDate = localDateStr();
   if (state.today.date !== todayDate) {
     state.today = { date: todayDate, picks: [] };
     _todayAllDoneToasted = false;
@@ -1233,8 +1235,7 @@ function openTodayPicker() {
   renderPicker();
 
   $("#saveTodayBtn").addEventListener("click", () => {
-    const todayDate = new Date().toISOString().slice(0, 10);
-    state.today = { date: todayDate, picks: allActions.filter(a => selected.includes(a.actionId)) };
+    state.today = { date: localDateStr(), picks: allActions.filter(a => selected.includes(a.actionId)) };
     _todayAllDoneToasted = false;
     saveState({ silent: true });
     closeSheet();
