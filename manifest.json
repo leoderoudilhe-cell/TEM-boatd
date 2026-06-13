@@ -2,7 +2,7 @@
   "name": "TEM Vision Board",
   "short_name": "TEM",
   "description": "Vision board premium mobile-first pour objectifs, sous-objectifs, actions et notes.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#07050a",

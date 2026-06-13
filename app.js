@@ -19,7 +19,6 @@ const defaultState = () => ({
     firstName: "",
   },
   globalNotes: "",
-  activeObjectiveId: null,
   visions: [],
   objectives: [],
 });
@@ -51,11 +50,15 @@ function mergeState(base, incoming) {
 
 function saveState({ silent = false } = {}) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const serialized = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, serialized);
     if (!silent) toast("Sauvegardé ✨");
   } catch (err) {
-    console.error(err);
-    toast("Stockage plein : compresse ou supprime quelques photos.");
+    if (err?.name === "QuotaExceededError") {
+      toast("Stockage plein : compresse ou supprime quelques photos.");
+    } else {
+      console.error("saveState:", err);
+    }
   }
 }
 
@@ -162,6 +165,10 @@ function bindGlobalEvents() {
   });
 
   if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      toast("✨ Mise à jour — rechargement...");
+      setTimeout(() => window.location.reload(), 1200);
+    });
     window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
   }
 }
@@ -179,13 +186,25 @@ async function createInitialPassword() {
   showApp();
 }
 
+let _unlockAttempts = 0;
+let _unlockThrottled = false;
+
 async function unlock() {
+  if (_unlockThrottled) return;
   const pass = $("#loginPassword").value.trim();
   const hash = await hashPassword(pass);
   if (hash !== state.settings.passwordHash) {
-    lockFeedback("Mot de passe incorrect.");
+    _unlockAttempts++;
+    if (_unlockAttempts >= 5) {
+      _unlockThrottled = true;
+      lockFeedback("Trop d'essais — réessaie dans 30s.");
+      setTimeout(() => { _unlockThrottled = false; _unlockAttempts = 0; lockFeedback(""); }, 30000);
+      return;
+    }
+    lockFeedback(`Mot de passe incorrect. (${_unlockAttempts}/5)`);
     return;
   }
+  _unlockAttempts = 0;
   sessionStorage.setItem(SESSION_KEY, "1");
   showApp();
 }
@@ -542,17 +561,19 @@ function openVisionEditor(id = null) {
   };
   ["visionScale","visionX","visionY"].forEach(id => $(`#${id}`).addEventListener("input", updatePreview));
 
-  $("#visionImageInput").addEventListener("change", async (e) => {
+  // Event delegation sur le container — fonctionne même après remplacement du innerHTML
+  $("#visionUploadBox").addEventListener("change", async (e) => {
+    if (!e.target.matches("input[type='file']")) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    selectedImageData = await compressImage(file);
-    $("#visionUploadBox").innerHTML = `<img src="${selectedImageData}" alt=""><input id="visionImageInput" type="file" accept="image/*" hidden />`;
-    $("#visionImageInput").addEventListener("change", async (ev) => {
-      const nextFile = ev.target.files?.[0];
-      if (!nextFile) return;
-      selectedImageData = await compressImage(nextFile);
-      $("#visionUploadBox").innerHTML = `<img src="${selectedImageData}" alt=""><input id="visionImageInput" type="file" accept="image/*" hidden />`;
-    });
+    try {
+      selectedImageData = await compressImage(file);
+    } catch {
+      toast("Impossible de charger cette image.");
+      return;
+    }
+    const box = $("#visionUploadBox");
+    box.innerHTML = `<img src="${selectedImageData}" alt=""><input id="visionImageInput" type="file" accept="image/*" hidden />`;
   });
 
   $$("#sizePicker button").forEach(btn => {
@@ -662,9 +683,7 @@ function openObjectiveEditor(id = null) {
     };
     if (obj) Object.assign(obj, payload);
     else {
-      const created = { id: uid("obj"), ...payload };
-      state.objectives.push(created);
-      state.activeObjectiveId = created.id;
+      state.objectives.push({ id: uid("obj"), ...payload });
     }
     saveState({ silent: true });
     renderAll();
@@ -676,8 +695,6 @@ function openObjectiveEditor(id = null) {
 function openObjectiveDetail(id) {
   const obj = state.objectives.find(o => o.id === id);
   if (!obj) return;
-  state.activeObjectiveId = id;
-  saveState({ silent: true });
   const pct = computeObjectiveProgress(obj);
   const vision = state.visions.find(v => v.id === obj.visionId);
 
@@ -706,7 +723,8 @@ function openObjectiveDetail(id) {
     obj.subgoals ||= [];
     obj.subgoals.push({ id: uid("sub"), title: "Nouveau sous-objectif", actions: [] });
     saveState({ silent: true });
-    openObjectiveDetail(obj.id);
+    renderAll();
+    renderSubgoalsEditor(obj);
   });
   $("#objectiveNotes").addEventListener("input", debounce(() => {
     obj.notes = $("#objectiveNotes").value;
@@ -722,6 +740,17 @@ function openObjectiveDetail(id) {
     renderAll();
     toast("Objectif supprimé.");
   });
+}
+
+function updateSheetProgress(obj) {
+  const pct = computeObjectiveProgress(obj);
+  const sheet = $("#editorSheet");
+  const fill = $(".progress-fill", sheet);
+  const hint = $(".hint", sheet);
+  const chip = $(".score-chip", sheet);
+  if (fill) fill.style.width = `${pct}%`;
+  if (hint) hint.textContent = `${pct}% — ${progressMessage(pct)}`;
+  if (chip) chip.textContent = `${pct}%`;
 }
 
 function renderSubgoalsEditor(obj) {
@@ -756,20 +785,21 @@ function renderSubgoalsEditor(obj) {
     $(".inline-delete", block).addEventListener("click", () => {
       obj.subgoals = obj.subgoals.filter(s => s.id !== sub.id);
       saveState({ silent: true });
-      openObjectiveDetail(obj.id);
       renderAll();
+      renderSubgoalsEditor(obj);
     });
 
     const actionsRoot = $(".sub-actions", block);
     (sub.actions || []).forEach(action => {
       actionsRoot.appendChild(actionRow(action, () => {
         toggleAction(obj.id, sub.id, action.id);
-        openObjectiveDetail(obj.id);
+        updateSheetProgress(obj);
+        renderSubgoalsEditor(obj);
       }, () => {
         sub.actions = sub.actions.filter(a => a.id !== action.id);
         saveState({ silent: true });
-        openObjectiveDetail(obj.id);
         renderAll();
+        renderSubgoalsEditor(obj);
       }));
     });
 
@@ -779,9 +809,10 @@ function renderSubgoalsEditor(obj) {
       if (!text) return;
       sub.actions ||= [];
       sub.actions.push({ id: uid("act"), text, done: false });
+      input.value = "";
       saveState({ silent: true });
-      openObjectiveDetail(obj.id);
       renderAll();
+      renderSubgoalsEditor(obj);
     };
     $(".add-action-btn", block).addEventListener("click", add);
     input.addEventListener("keydown", (e) => {
@@ -843,6 +874,8 @@ function openSheet(html) {
 }
 
 function closeSheet() {
+  selectedImageData = null;
+  saveState({ silent: true });
   $("#sheetBackdrop").classList.add("hidden");
   $("#editorSheet").classList.add("hidden");
   $("#sheetContent").innerHTML = "";
@@ -922,6 +955,11 @@ function exportData() {
 async function importData(e) {
   const file = e.target.files?.[0];
   if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    toast("Fichier trop grand (max 50 Mo).");
+    e.target.value = "";
+    return;
+  }
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
