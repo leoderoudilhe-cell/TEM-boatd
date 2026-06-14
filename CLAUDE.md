@@ -10,16 +10,17 @@ GitHub : https://github.com/leoderoudilhe-cell/TEM-boatd (note: "boatd" typo vol
 index.html   — structure DOM, template vision card, sections de vue
 styles.css   — design system complet + animations
 app.js       — toute la logique (state, render, events)
-sw.js        — service worker network-first (CACHE_NAME: tem-board-v3)
+sw.js        — service worker network-first (CACHE_NAME: tem-board-v4) + handlers push/notificationclick
 manifest.json — PWA manifest
 assets/      — icon-192.png, icon-512.png (fourmi 🐜 rasterisée), icon.svg
 GUIDE.md     — guide d'utilisation pour l'utilisatrice finale
 ```
+Backend notifs séparé (hors de ce repo) : `/Users/derouds/DEV/tem-backend` → repo privé `leoderoudilhe-cell/tem-backend`. Voir section "Notifications push".
 
 ## State (localStorage: "tem-board-v1")
 ```js
 {
-  settings: { passwordEnabled, passwordHash, hasCompletedSetup, firstName },
+  settings: { passwordEnabled, passwordHash, hasCompletedSetup, firstName, notifEnabled },
   globalNotes: string,
   visions: [{ id, title, subtitle, category, image (base64), size, linkedObjectiveId, tune:{scale,x,y} }],
   objectives: [{ id, title, why, color, visionId, subgoals:[{ id, title, actions:[{id,text,done,priority?,doneAt?}] }], notes }],
@@ -65,9 +66,18 @@ Garder ces mots dans les libellés ; ne pas réintroduire "Pilier" / "Mission" /
 - Rituel quotidien : ouverture directe sur Top 3 ; streak entretenu à la planification du Top 3 ; streak visible dès J1
 - Action prioritaire (★, champ `priority`) : remonte en tête du picker Top 3
 - Bilan de la semaine (`renderWeeklyReview` dans le Nid) basé sur `doneAt` ; libellé spécial le dimanche
-- Notifs Phase A : `motivationMessage()` en toast à l'ouverture (1×/session, flag sessionStorage `tem-greeted`). Phase B (vraies push) = backend non encore fait
-- Accessibilité : `aria-label` sur boutons-icônes, `prefers-reduced-motion` respecté en JS
+- Notifs Phase A : `motivationMessage()` en toast à l'ouverture (1×/session, flag sessionStorage `tem-greeted`)
+- Notifs Phase B (vraies push, même app fermée) : IMPLÉMENTÉE — voir section "Notifications push"
+- Accessibilité : `aria-label` sur boutons-icônes, `aria-current` nav, `aria-pressed` sur ★, `prefers-reduced-motion` respecté en JS, cibles tactiles 44px
 - Icône PWA : PNG fourmi rasterisés depuis l'emoji (canvas), apple-touch-icon = icon-192.png
+
+## Notifications push (Phase B — backend séparé)
+Backend dédié **tem-backend** (repo privé `leoderoudilhe-cell/tem-backend`, local `/Users/derouds/DEV/tem-backend`) : Node/Express + `web-push`, déployé en Web Service Render. L'app statique l'appelle via la constante `BACKEND_URL` (en haut d'app.js).
+- App : toggle "Rappels de motivation" dans Réglages → `toggleNotifications` → `subscribeToPush` (permission, `pushManager.subscribe`, POST `/api/push-subscribe`). Ré-abonnement silencieux au boot si `settings.notifEnabled` + permission `granted`. Garde iOS : actif uniquement en PWA installée (`isStandalone`). `timeoutSignal()` = polyfill d'`AbortSignal.timeout`.
+- `sw.js` : handlers `push` (showNotification) + `notificationclick` (focus/openWindow).
+- Backend : 2 rappels/jour 9h & 19h (heure de Paris via `Intl`), messages en rotation quotidienne, anti-doublon par clé jour+heure **persistée**, abonnements persistés sur GitHub (`data/push-subs.json`, nécessite `GITHUB_TOKEN`). C'est le serveur qui pousse → marche app fermée.
+- Variables d'env Render : `VAPID_PUBLIC` / `VAPID_PRIVATE` (clés dans `tem-backend/VAPID-KEYS.txt`, gitignored), `GITHUB_TOKEN` (persistance), `PUSH_SECRET` (protège `/api/push-test`), `ALLOWED_ORIGINS` (CORS, défaut https://tem-boatd.onrender.com).
+- Keepalive : self-ping serveur toutes les 4 min ; pas de cron externe (choix assumé). iOS : requiert PWA installée + permission accordée.
 
 ## Déploiement
 ```bash
