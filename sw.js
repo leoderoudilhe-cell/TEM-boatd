@@ -1,4 +1,4 @@
-const CACHE_NAME = "tem-board-v2";
+const CACHE_NAME = "tem-board-v3";
 const ASSETS = [
   "./",
   "./index.html",

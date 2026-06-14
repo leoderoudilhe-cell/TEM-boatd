@@ -337,9 +337,9 @@ button{border:0;color:inherit;cursor:pointer}
   z-index:80;
 }
 .bottom-nav button{
-  min-height:50px;border-radius:17px;background:transparent;color:var(--muted2);
+  min-height:50px;border-radius:17px;background:transparent;color:var(--muted);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  font-size:9.5px;font-weight:850;padding:0 2px;
+  font-size:10.5px;font-weight:850;padding:0 1px;
   transition:color .2s,background .2s;
 }
 .bottom-nav span{font-size:16px;line-height:1}
@@ -592,6 +592,28 @@ input[type="range"]{width:100%;accent-color:var(--pink)}
 .today-pick-title{font-size:15px;font-weight:800;margin:0 0 3px;color:var(--text)}
 .today-pick-obj{font-size:12px;color:var(--muted);margin:0}
 .today-progress{margin:0 0 6px}
+
+/* Action prioritaire */
+.prio-star{color:var(--gold);font-size:.92em}
+.action-row.is-priority .action-text{color:#fff}
+.prio-btn{
+  width:40px;height:40px;border-radius:12px;flex:0 0 auto;
+  background:rgba(255,217,139,.08);border:1px solid rgba(255,217,139,.2);
+  color:rgba(255,217,139,.45);font-size:15px;line-height:1;
+  transition:color .2s,background .2s,border-color .2s;
+}
+.prio-btn.on{color:var(--gold);background:rgba(255,217,139,.16);border-color:rgba(255,217,139,.45);box-shadow:0 0 14px rgba(255,217,139,.22)}
+
+/* Bilan de la semaine */
+.weekly-card{
+  border-radius:28px;
+  background:linear-gradient(145deg,rgba(255,217,139,.12),rgba(255,79,216,.05));
+  border:1px solid rgba(255,217,139,.22);
+  padding:16px 18px;margin-bottom:14px;
+  box-shadow:0 0 30px rgba(255,217,139,.06);
+}
+.weekly-card .big{font-size:30px;font-weight:900;letter-spacing:-.04em;margin:3px 0 4px}
+.weekly-card .sub{color:var(--muted);font-size:13px;margin:0;line-height:1.4}
 
 @media (min-width:560px){
   .main-app{padding-left:18px;padding-right:18px}

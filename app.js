@@ -42,6 +42,7 @@ let lastTouchDelete = { id: null, time: 0 };
 let _heroAnimated = false;
 let _todayAllDoneToasted = false;
 let _heroBgCached = null;
+let _sheetFlush = null; // flush des champs debounced d'un sheet avant fermeture
 
 function loadState() {
   try {
@@ -116,9 +117,16 @@ function showApp() {
   $("#mainApp").classList.remove("hidden");
   $("#bottomNav").classList.remove("hidden");
   renderAll();
+  // Au lancement, aller droit au rituel du jour si le Top 3 est déjà choisi
+  if (state.today.date === localDateStr() && (state.today.picks || []).length > 0) switchTab("Today");
   if (!_heroAnimated) {
     _heroAnimated = true;
     animateHero();
+  }
+  // Petit message de motivation une fois par ouverture de session
+  if (sessionStorage.getItem("tem-greeted") !== "1") {
+    sessionStorage.setItem("tem-greeted", "1");
+    setTimeout(() => toast(motivationMessage()), 1500);
   }
 }
 
@@ -185,7 +193,7 @@ function bindGlobalEvents() {
     const dx = e.changedTouches[0].clientX - _swipeX;
     const dy = e.changedTouches[0].clientY - _swipeY;
     _swipeX = null;
-    if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
     navigateTab(dx < 0 ? 1 : -1);
   }, { passive: true });
 
@@ -284,7 +292,7 @@ function lockFeedback(message) {
 }
 
 function renderAll() {
-  $("#greetingTitle").textContent = state.settings.firstName ? `${state.settings.firstName} Board` : "Life Progress Board";
+  $("#greetingTitle").textContent = "TEM Board";
   const notes = $("#globalNotes");
   if (document.activeElement !== notes) notes.value = state.globalNotes || "";
   $("#passwordToggle").checked = !!state.settings.passwordEnabled;
@@ -293,6 +301,37 @@ function renderAll() {
   renderObjectives();
   renderFocus();
   renderToday();
+  renderWeeklyReview();
+}
+
+function startOfWeekTs() {
+  const d = new Date();
+  const day = (d.getDay() + 6) % 7; // 0 = lundi
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return d.getTime();
+}
+
+function renderWeeklyReview() {
+  const el = $("#weeklyReview");
+  if (!el) return;
+  const actions = state.objectives.flatMap(getObjectiveActions);
+  if (!actions.length) { el.innerHTML = ""; return; }
+  const start = startOfWeekTs();
+  const doneThisWeek = actions.filter(a => a.doneAt && a.doneAt >= start).length;
+  const withActions = state.objectives.filter(o => getObjectiveActions(o).length);
+  const top = withActions.slice().sort((a, b) => computeObjectiveProgress(b) - computeObjectiveProgress(a))[0];
+  const topPct = top ? computeObjectiveProgress(top) : 0;
+  const isSunday = new Date().getDay() === 0;
+  const streak = state.streak?.count || 0;
+  const streakTxt = streak >= 1 ? `🔥 ${streak === 1 ? "1er jour" : streak + " jours d'affilée"}` : "";
+  el.innerHTML = `
+    <div class="weekly-card">
+      <p class="eyebrow" style="color:var(--gold)">${isSunday ? "Bilan du dimanche 🌙" : "Cette semaine"}</p>
+      <p class="big">${doneThisWeek} action${doneThisWeek !== 1 ? "s" : ""} cochée${doneThisWeek !== 1 ? "s" : ""}</p>
+      <p class="sub">${[streakTxt, top ? `Objectif en tête : ${escapeHtml(top.title)} (${topPct}%)` : ""].filter(Boolean).join(" · ")}</p>
+    </div>
+  `;
 }
 
 // ─── Progress helpers ─────────────────────────────────────────────────────────
@@ -322,6 +361,22 @@ function progressMessage(pct) {
   return "Chaque petite action construit la vision.";
 }
 
+// Message de motivation contextuel affiché à l'ouverture (Phase A, sans backend)
+function motivationMessage() {
+  const h = new Date().getHours();
+  const greet = h < 12 ? "Bonjour" : h < 18 ? "Bel après-midi" : "Bonne soirée";
+  if (!state.objectives.length) return `${greet} 🌱 Crée ton premier objectif pour lancer ta vision.`;
+  const picks = (state.today.date === localDateStr() ? state.today.picks : []) || [];
+  if (!picks.length) return `${greet} 🎯 Choisis tes 3 actions du jour pour avancer.`;
+  const remaining = picks.map(p => {
+    const o = state.objectives.find(x => x.id === p.objectiveId);
+    const s = o?.subgoals?.find(y => y.id === p.subId);
+    return s?.actions?.find(a => a.id === p.actionId);
+  }).filter(Boolean).filter(a => !a.done).length;
+  if (remaining === 0) return `${greet} ✨ Ton Top 3 du jour est bouclé. Tu assures.`;
+  return `${greet} 🔥 Il te reste ${remaining} action${remaining > 1 ? "s" : ""} dans ton Top 3.`;
+}
+
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 function renderHero() {
@@ -348,9 +403,9 @@ function renderHero() {
   const streak = state.streak?.count || 0;
   const badge = $("#streakBadge");
   if (badge) {
-    if (streak >= 2) {
+    if (streak >= 1) {
       badge.style.display = "flex";
-      badge.querySelector(".streak-count").textContent = `${streak} jour${streak > 1 ? "s" : ""} d'affilée`;
+      badge.querySelector(".streak-count").textContent = streak === 1 ? "1er jour" : `${streak} jours d'affilée`;
     } else {
       badge.style.display = "none";
     }
@@ -358,6 +413,8 @@ function renderHero() {
 }
 
 function animateHero() {
+  // renderHero a déjà posé les valeurs finales — on saute juste l'animation
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const target = computeGlobalProgress();
   const circumference = 314;
   const ring = $("#ringProgress");
@@ -383,6 +440,7 @@ function animateHero() {
 function animateCounter(selector, from, to, duration, suffix = "") {
   const el = $(selector);
   if (!el) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { el.textContent = `${to}${suffix}`; return; }
   const start = performance.now();
   const tick = (now) => {
     const t = Math.min(1, (now - start) / duration);
@@ -494,7 +552,7 @@ function renderObjectives() {
   const list = $("#objectivesList");
   list.innerHTML = "";
   if (!state.objectives.length) {
-    list.appendChild(emptyState("Crée un pilier", "Un objectif principal contient des sous-objectifs et des actions cochables.", "+ ajouter un objectif", () => openObjectiveEditor()));
+    list.appendChild(emptyState("Crée un objectif", "Un objectif contient des étapes et des actions cochables.", "+ ajouter un objectif", () => openObjectiveEditor()));
     return;
   }
   state.objectives.forEach(obj => {
@@ -509,7 +567,7 @@ function renderObjectives() {
     card.innerHTML = `
       <div class="objective-head">
         <div>
-          <p class="eyebrow">${linkedVision ? escapeHtml(linkedVision.title) : "PILIER TEM"}</p>
+          <p class="eyebrow">${linkedVision ? escapeHtml(linkedVision.title) : "OBJECTIF"}</p>
           <h3>${escapeHtml(obj.title || "Objectif")}</h3>
           <p class="muted">${escapeHtml(obj.why || "Ajoute le pourquoi de cet objectif.")}</p>
         </div>
@@ -517,7 +575,7 @@ function renderObjectives() {
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="objective-meta">
-        <span class="meta-pill">${(obj.subgoals || []).length} sous-objectif(s)</span>
+        <span class="meta-pill">${(obj.subgoals || []).length} étape(s)</span>
         <span class="meta-pill">${doneActions}/${totalActions} action(s)</span>
       </div>
     `;
@@ -545,7 +603,7 @@ function renderFocus() {
     card.innerHTML = `
       <div class="objective-head">
         <div>
-          <p class="eyebrow">MISSION</p>
+          <p class="eyebrow">Objectif</p>
           <h3>${escapeHtml(obj.title)}</h3>
           <p class="muted">${progressMessage(pct)}</p>
         </div>
@@ -568,19 +626,21 @@ function renderFocus() {
   });
 }
 
-function actionRow(action, onToggle, withDelete = null) {
+function actionRow(action, onToggle, withDelete = null, onPriority = null) {
   const row = document.createElement("div");
-  row.className = `action-row ${action.done ? "done" : ""}`;
+  row.className = `action-row ${action.done ? "done" : ""} ${action.priority ? "is-priority" : ""}`;
   row.innerHTML = `
     <div class="check"></div>
-    <div class="action-text">${escapeHtml(action.text || "Action")}</div>
-    ${withDelete ? `<button class="inline-delete" type="button">×</button>` : ""}
+    <div class="action-text">${action.priority ? '<span class="prio-star">★</span> ' : ""}${escapeHtml(action.text || "Action")}</div>
+    ${onPriority ? `<button class="prio-btn ${action.priority ? "on" : ""}" type="button" aria-label="Marquer prioritaire">★</button>` : ""}
+    ${withDelete ? `<button class="inline-delete" type="button" aria-label="Supprimer">×</button>` : ""}
   `;
   row.addEventListener("click", (e) => {
-    if (e.target.closest(".inline-delete")) return;
+    if (e.target.closest(".inline-delete") || e.target.closest(".prio-btn")) return;
     onToggle();
   });
   if (withDelete) $(".inline-delete", row).addEventListener("click", withDelete);
+  if (onPriority) $(".prio-btn", row).addEventListener("click", (e) => { e.stopPropagation(); onPriority(); });
   return row;
 }
 
@@ -591,6 +651,7 @@ function toggleAction(objectiveId, subId, actionId) {
   if (!action) return;
   const prevPct = computeObjectiveProgress(obj);
   action.done = !action.done;
+  if (action.done) action.doneAt = Date.now(); else delete action.doneAt;
   const newPct = computeObjectiveProgress(obj);
   if (action.done) updateStreak();
   saveState({ silent: true });
@@ -663,11 +724,11 @@ function openQuickAddSheet() {
   openSheet(`
     <div class="sheet-title-row">
       <div><p class="eyebrow">Créer</p><h2>Nouvel élément</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="stack">
       <button id="quickVision" class="primary-btn full">Ajouter une photo de vision</button>
-      <button id="quickObjective" class="ghost-btn full">Ajouter un objectif principal</button>
+      <button id="quickObjective" class="ghost-btn full">Ajouter un objectif</button>
       <button id="quickNote" class="ghost-btn full">Écrire dans le Nid</button>
     </div>
   `);
@@ -683,7 +744,7 @@ function openVisionEditor(id = null) {
   openSheet(`
     <div class="sheet-title-row">
       <div><p class="eyebrow">${vision ? "Modifier" : "Créer"}</p><h2>Photo de vision</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="form-grid">
       <label class="field"><span>Titre</span><input id="visionTitle" value="${escapeAttr(vision?.title || "")}" placeholder="Ex : Corps & énergie" /></label>
@@ -765,6 +826,8 @@ function openVisionEditor(id = null) {
 // ─── Vision viewer (full screen) ─────────────────────────────────────────────
 
 function openVisionViewer(id) {
+  // Une vision sans photo n'a rien à montrer en plein écran → détail direct
+  if (!state.visions.find(v => v.id === id)?.image) { openVisionDetail(id); return; }
   const visions = state.visions.filter(v => v.image);
   if (!visions.length) { openVisionDetail(id); return; }
 
@@ -790,8 +853,8 @@ function openVisionViewer(id) {
       <img class="vision-viewer-img" src="${v.image}" style="transform:scale(${tune.scale}) translate(${tune.x}%,${tune.y}%)" />
       <div class="vision-viewer-overlay"></div>
       <div class="vision-viewer-nav">
-        <button class="vision-viewer-btn" id="vvEdit" title="Modifier">✎</button>
-        <button class="vision-viewer-btn" id="vvClose" title="Fermer">×</button>
+        <button class="vision-viewer-btn" id="vvEdit" title="Modifier" aria-label="Modifier">✎</button>
+        <button class="vision-viewer-btn" id="vvClose" title="Fermer" aria-label="Fermer">×</button>
       </div>
       <div class="vision-viewer-info">
         <p class="eyebrow" style="color:rgba(255,255,255,.7);margin-bottom:2px">${escapeHtml(v.category || "VISION")}</p>
@@ -838,7 +901,7 @@ function openVisionDetail(id) {
   openSheet(`
     <div class="sheet-title-row">
       <div><p class="eyebrow">${escapeHtml(vision.category || "VISION")}</p><h2>${escapeHtml(vision.title)}</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="upload-box">
       <img src="${vision.image || placeholderSvg(vision.title)}" alt="">
@@ -887,8 +950,8 @@ function openObjectiveEditor(id = null) {
   const currentColor = obj?.color || "pink";
   openSheet(`
     <div class="sheet-title-row">
-      <div><p class="eyebrow">${obj ? "Modifier" : "Créer"}</p><h2>Objectif principal</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <div><p class="eyebrow">${obj ? "Modifier" : "Créer"}</p><h2>Objectif</h2></div>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="form-grid">
       <label class="field"><span>Titre</span><input id="objectiveTitle" value="${escapeAttr(obj?.title || "")}" placeholder="Ex : Corps & énergie" /></label>
@@ -945,14 +1008,14 @@ function openObjectiveDetail(id) {
 
   openSheet(`
     <div class="sheet-title-row">
-      <div><p class="eyebrow">${vision ? escapeHtml(vision.title) : "PILIER"}</p><h2>${escapeHtml(obj.title)}</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <div><p class="eyebrow">${vision ? escapeHtml(vision.title) : "OBJECTIF"}</p><h2>${escapeHtml(obj.title)}</h2></div>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <p class="muted">${escapeHtml(obj.why || "Ajoute le pourquoi de cet objectif.")}</p>
     <div class="progress-track" style="--obj-c:${color}"><div class="progress-fill" style="width:${pct}%"></div></div>
     <p class="hint">${pct}% — ${progressMessage(pct)}</p>
     <div id="subgoalsEditor"></div>
-    <button id="addSubgoalBtn" class="ghost-btn full">+ sous-objectif</button>
+    <button id="addSubgoalBtn" class="ghost-btn full">+ étape</button>
     <label class="field">
       <span>Notes de cet objectif</span>
       <textarea id="objectiveNotes" placeholder="Notes, idées, ressentis...">${escapeHtml(obj.notes || "")}</textarea>
@@ -972,7 +1035,7 @@ function openObjectiveDetail(id) {
   renderSubgoalsEditor(obj);
   $("#addSubgoalBtn").addEventListener("click", () => {
     obj.subgoals ||= [];
-    obj.subgoals.push({ id: uid("sub"), title: "Nouveau sous-objectif", actions: [] });
+    obj.subgoals.push({ id: uid("sub"), title: "Nouvelle étape", actions: [] });
     saveState({ silent: true });
     renderAll();
     renderSubgoalsEditor(obj);
@@ -981,11 +1044,13 @@ function openObjectiveDetail(id) {
     obj.notes = $("#objectiveNotes").value;
     saveState({ silent: true });
   }, 300));
+  _sheetFlush = () => { const n = $("#objectiveNotes"); if (n) obj.notes = n.value; };
   $("#editObjectiveBtn").addEventListener("click", () => openObjectiveEditor(obj.id));
   $("#deleteObjectiveBtn").addEventListener("click", () => {
     if (!confirm("Supprimer cet objectif et toutes ses actions ?")) return;
     state.objectives = state.objectives.filter(o => o.id !== obj.id);
     state.visions.forEach(v => { if (v.linkedObjectiveId === obj.id) v.linkedObjectiveId = null; });
+    state.today.picks = (state.today.picks || []).filter(p => p.objectiveId !== obj.id);
     saveState({ silent: true });
     closeSheet();
     renderAll();
@@ -1008,7 +1073,7 @@ function renderSubgoalsEditor(obj) {
   const root = $("#subgoalsEditor");
   root.innerHTML = "";
   if (!obj.subgoals?.length) {
-    root.appendChild(emptyState("Pas encore de sous-objectif", "Ajoute un sous-objectif, puis des actions à cocher.", "+ sous-objectif", () => $("#addSubgoalBtn").click()));
+    root.appendChild(emptyState("Pas encore d'étape", "Ajoute une étape, puis des actions à cocher.", "+ étape", () => $("#addSubgoalBtn").click()));
     return;
   }
   obj.subgoals.forEach(sub => {
@@ -1017,7 +1082,7 @@ function renderSubgoalsEditor(obj) {
     block.innerHTML = `
       <div class="subgoal-head">
         <input class="subgoal-title-input" value="${escapeAttr(sub.title || "")}" style="width:100%;background:transparent;color:white;border:0;outline:0;font-weight:900;font-size:15px" />
-        <button class="inline-delete" type="button">×</button>
+        <button class="inline-delete" type="button" aria-label="Supprimer">×</button>
       </div>
       <div class="sub-actions"></div>
       <div class="two-col" style="margin-top:10px">
@@ -1026,7 +1091,7 @@ function renderSubgoalsEditor(obj) {
       </div>
     `;
     $(".subgoal-title-input", block).addEventListener("input", debounce((e) => {
-      sub.title = e.target.value || "Sous-objectif";
+      sub.title = e.target.value || "Étape";
       saveState({ silent: true });
       renderObjectives();
       renderFocus();
@@ -1045,6 +1110,11 @@ function renderSubgoalsEditor(obj) {
         renderSubgoalsEditor(obj);
       }, () => {
         sub.actions = sub.actions.filter(a => a.id !== action.id);
+        saveState({ silent: true });
+        renderAll();
+        renderSubgoalsEditor(obj);
+      }, () => {
+        action.priority = !action.priority;
         saveState({ silent: true });
         renderAll();
         renderSubgoalsEditor(obj);
@@ -1090,6 +1160,12 @@ function renderToday() {
     return action ? { ...p, action, obj, objTitle: obj.title } : null;
   }).filter(Boolean);
 
+  // Purge des picks orphelins (action/objectif supprimé entre-temps)
+  if (resolved.length !== picks.length) {
+    state.today.picks = resolved.map(r => ({ objectiveId: r.objectiveId, subId: r.subId, actionId: r.actionId, text: r.action.text, objTitle: r.objTitle }));
+    saveState({ silent: true });
+  }
+
   const doneCount = resolved.filter(r => r.action.done).length;
   const formatted = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
@@ -1099,7 +1175,7 @@ function renderToday() {
   header.className = "section-title-row";
   header.innerHTML = `
     <div>
-      <p class="eyebrow">Focus du jour</p>
+      <p class="eyebrow">Top 3 du jour</p>
       <h2>Mes 3 actions</h2>
     </div>
     <button id="pickTodayBtn" class="mini-btn">Choisir</button>
@@ -1169,29 +1245,33 @@ function renderToday() {
 }
 
 function openTodayPicker() {
+  const existingPicks = (state.today.picks || []).map(p => p.actionId);
   const allActions = [];
   state.objectives.forEach(obj => {
     (obj.subgoals || []).forEach(sub => {
       (sub.actions || []).forEach(action => {
-        if (!action.done) {
-          allActions.push({ objectiveId: obj.id, subId: sub.id, actionId: action.id, text: action.text, objTitle: obj.title });
+        // Actions non faites + celles déjà dans le Top 3 (même cochées, pour pouvoir les retirer)
+        if (!action.done || existingPicks.includes(action.id)) {
+          allActions.push({ objectiveId: obj.id, subId: sub.id, actionId: action.id, text: action.text, objTitle: obj.title, priority: !!action.priority });
         }
       });
     });
   });
+
+  // Les actions prioritaires remontent en tête pour faciliter le choix du matin
+  allActions.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0));
 
   if (!allActions.length) {
     toast("Ajoute d'abord des actions non complétées dans tes objectifs.");
     return;
   }
 
-  const existingPicks = (state.today.picks || []).map(p => p.actionId);
   let selected = [...existingPicks];
 
   openSheet(`
     <div class="sheet-title-row">
       <div><p class="eyebrow">Top 3</p><h2>Actions du jour</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <p class="hint">Choisis jusqu'à 3 actions clés à accomplir aujourd'hui. <span id="pickCounter" style="font-weight:900;color:var(--gold)">${selected.length}/3</span></p>
     <div id="pickerActions" class="form-grid" style="margin-bottom:8px"></div>
@@ -1214,7 +1294,7 @@ function openTodayPicker() {
       row.innerHTML = `
         <div class="check ${isSelected ? "done" : ""}"></div>
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:800;color:var(--text)">${escapeHtml(a.text)}</div>
+          <div style="font-size:14px;font-weight:800;color:var(--text)">${a.priority ? '<span class="prio-star">★</span> ' : ""}${escapeHtml(a.text)}</div>
           <div style="font-size:12px;color:var(--muted)">${escapeHtml(a.objTitle)}</div>
         </div>
         ${isSelected ? `<span class="meta-pill" style="font-weight:900">${pos}</span>` : ""}
@@ -1236,6 +1316,7 @@ function openTodayPicker() {
 
   $("#saveTodayBtn").addEventListener("click", () => {
     state.today = { date: localDateStr(), picks: allActions.filter(a => selected.includes(a.actionId)) };
+    if (selected.length) updateStreak(); // planifier son Top 3 entretient le streak
     _todayAllDoneToasted = false;
     saveState({ silent: true });
     closeSheet();
@@ -1267,7 +1348,7 @@ function openChangePasswordSheet({ enabling = false } = {}) {
   openSheet(`
     <div class="sheet-title-row">
       <div><p class="eyebrow">Sécurité</p><h2>${enabling ? "Créer" : "Changer"} le mot de passe</h2></div>
-      <button class="close-btn" data-close>×</button>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="form-grid">
       <label class="field"><span>Nouveau mot de passe</span><input id="newPassword" type="password" placeholder="Minimum 4 caractères" /></label>
@@ -1290,6 +1371,7 @@ function openChangePasswordSheet({ enabling = false } = {}) {
 }
 
 function openSheet(html) {
+  _sheetFlush = null;
   const sheet = $("#editorSheet");
   sheet.style.transform = "";
   sheet.style.opacity = "";
@@ -1300,6 +1382,8 @@ function openSheet(html) {
 }
 
 function closeSheet() {
+  _sheetFlush?.();
+  _sheetFlush = null;
   selectedImageData = null;
   saveState({ silent: true });
   const sheet = $("#editorSheet");
