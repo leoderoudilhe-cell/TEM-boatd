@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = "tem-board-v1";
 const SESSION_KEY = "tem-unlocked-session-v1";
+const BACKEND_URL = "https://tem-backend.onrender.com"; // backend Web Push (rappels de motivation)
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -28,6 +29,7 @@ const defaultState = () => ({
     passwordHash: null,
     hasCompletedSetup: false,
     firstName: "",
+    notifEnabled: false,
   },
   globalNotes: "",
   visions: [],
@@ -177,6 +179,7 @@ function bindGlobalEvents() {
   $("#importInput").addEventListener("change", importData);
   $("#resetBtn").addEventListener("click", resetApp);
   $("#openGuideBtn").addEventListener("click", openGuideSheet);
+  $("#notifToggle")?.addEventListener("change", toggleNotifications);
 
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 
@@ -206,7 +209,14 @@ function bindGlobalEvents() {
       toast("✨ Mise à jour — rechargement...");
       setTimeout(() => window.location.reload(), 1200);
     });
-    window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").then(() => {
+        // Ré-abonnement silencieux si les rappels étaient activés
+        if (state.settings.notifEnabled && "Notification" in window && Notification.permission === "granted") {
+          subscribeToPush().catch(() => {});
+        }
+      }).catch(() => {});
+    });
   }
 }
 
@@ -303,6 +313,7 @@ function renderAll() {
   renderFocus();
   renderToday();
   renderWeeklyReview();
+  updateNotifUI();
 }
 
 function startOfWeekTs() {
@@ -1573,6 +1584,121 @@ function celebrate(amount = 24) {
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
+
+// ─── Web Push (rappels de motivation via tem-backend) ──────────────────────────
+
+function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function isStandalone() {
+  return window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function subscribeToPush() {
+  const reg = await navigator.serviceWorker.ready;
+  const resp = await fetch(`${BACKEND_URL}/api/push-key`, { signal: AbortSignal.timeout(15000) });
+  if (!resp.ok) throw new Error("serveur injoignable");
+  const { publicKey } = await resp.json();
+  if (!publicKey) throw new Error("clé VAPID absente");
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+  const r2 = await fetch(`${BACKEND_URL}/api/push-subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sub.toJSON()),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!r2.ok) throw new Error("abonnement refusé");
+  return true;
+}
+
+async function unsubscribeFromPush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await sub.unsubscribe().catch(() => {});
+      fetch(`${BACKEND_URL}/api/push-unsubscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      }).catch(() => {});
+    }
+  } catch (e) {}
+}
+
+async function toggleNotifications() {
+  const toggle = $("#notifToggle");
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    toast("Notifications non supportées sur ce navigateur.");
+    if (toggle) toggle.checked = false;
+    return;
+  }
+  if (isIOS() && !isStandalone()) {
+    toast("Installe TEM sur l'écran d'accueil pour activer les rappels.");
+    if (toggle) toggle.checked = false;
+    return;
+  }
+  if (toggle.checked) {
+    if (Notification.permission === "denied") {
+      toast("Bloquées — Réglages iPhone → TEM → Notifications.");
+      toggle.checked = false;
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") { toast("Permission refusée."); toggle.checked = false; return; }
+    toast("Activation des rappels…");
+    try {
+      await subscribeToPush();
+      state.settings.notifEnabled = true;
+      saveState({ silent: true });
+      toast("🔔 Rappels activés !");
+    } catch (e) {
+      toggle.checked = false;
+      toast("⚠️ " + String(e.message || "échec").slice(0, 50));
+    }
+  } else {
+    state.settings.notifEnabled = false;
+    saveState({ silent: true });
+    await unsubscribeFromPush();
+    toast("🔕 Rappels désactivés.");
+  }
+  updateNotifUI();
+}
+
+function updateNotifUI() {
+  const toggle = $("#notifToggle");
+  const hint = $("#notifHint");
+  if (!toggle) return;
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    toggle.checked = false; toggle.disabled = true;
+    if (hint) hint.textContent = "Non supporté sur ce navigateur.";
+    return;
+  }
+  if (isIOS() && !isStandalone()) {
+    toggle.checked = false;
+    if (hint) hint.textContent = "📲 Installe TEM sur l'écran d'accueil pour activer.";
+    return;
+  }
+  if (Notification.permission === "denied") {
+    toggle.checked = false;
+    if (hint) hint.textContent = "❌ Bloquées — Réglages iPhone → TEM → Notifications.";
+    return;
+  }
+  const on = !!state.settings.notifEnabled && Notification.permission === "granted";
+  toggle.checked = on;
+  if (hint) hint.textContent = on ? "✅ Rappels actifs : matin, midi et soir." : "Reçois 3 petits rappels motivants par jour.";
+}
 
 function debounce(fn, wait = 250) {
   let timer;
