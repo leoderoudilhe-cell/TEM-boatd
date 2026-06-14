@@ -317,11 +317,9 @@ function renderAll() {
 }
 
 function startOfWeekTs() {
-  const d = new Date();
-  const day = (d.getDay() + 6) % 7; // 0 = lundi
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - day);
-  return d.getTime();
+  const now = new Date();
+  const day = (now.getDay() + 6) % 7; // 0 = lundi
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - day).getTime();
 }
 
 function renderWeeklyReview() {
@@ -341,7 +339,7 @@ function renderWeeklyReview() {
     <div class="weekly-card">
       <p class="eyebrow" style="color:var(--gold)">${isSunday ? "Bilan du dimanche 🌙" : "Cette semaine"}</p>
       <p class="big">${doneThisWeek} action${doneThisWeek !== 1 ? "s" : ""} cochée${doneThisWeek !== 1 ? "s" : ""}</p>
-      <p class="sub">${[streakTxt, top ? `Objectif en tête : ${escapeHtml(top.title)} (${topPct}%)` : ""].filter(Boolean).join(" · ")}</p>
+      <p class="sub">${[streakTxt, top ? `Objectif en tête : ${escapeHtml(top.title.length > 24 ? top.title.slice(0, 24) + "…" : top.title)} (${topPct}%)` : ""].filter(Boolean).join(" · ")}</p>
     </div>
   `;
 }
@@ -644,7 +642,7 @@ function actionRow(action, onToggle, withDelete = null, onPriority = null) {
   row.innerHTML = `
     <div class="check"></div>
     <div class="action-text">${action.priority ? '<span class="prio-star">★</span> ' : ""}${escapeHtml(action.text || "Action")}</div>
-    ${onPriority ? `<button class="prio-btn ${action.priority ? "on" : ""}" type="button" aria-label="Marquer prioritaire">★</button>` : ""}
+    ${onPriority ? `<button class="prio-btn ${action.priority ? "on" : ""}" type="button" aria-pressed="${!!action.priority}" aria-label="${action.priority ? "Retirer la priorité" : "Marquer prioritaire"}">★</button>` : ""}
     ${withDelete ? `<button class="inline-delete" type="button" aria-label="Supprimer">×</button>` : ""}
   `;
   row.addEventListener("click", (e) => {
@@ -722,7 +720,11 @@ function switchTab(name) {
   _currentTabIdx = Math.max(0, TAB_ORDER.indexOf(name));
   Object.values(TAB_VIEWS).forEach(sel => $(sel)?.classList.remove("active"));
   $(TAB_VIEWS[name])?.classList.add("active");
-  $$("#bottomNav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$("#bottomNav button").forEach(b => {
+    const sel = b.dataset.tab === name;
+    b.classList.toggle("active", sel);
+    b.setAttribute("aria-current", sel ? "page" : "false");
+  });
 }
 
 function navigateTab(delta) {
@@ -1423,6 +1425,7 @@ function openGuideSheet() {
 }
 
 function openSheet(html) {
+  _sheetFlush?.(); // flush l'éventuel sheet précédent (ex. "Modifier" depuis un détail)
   _sheetFlush = null;
   const sheet = $("#editorSheet");
   sheet.style.transform = "";
@@ -1591,6 +1594,10 @@ function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 function isStandalone() {
   return window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches;
 }
+function timeoutSignal(ms) {
+  if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
+}
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
@@ -1603,7 +1610,7 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribeToPush() {
   const reg = await navigator.serviceWorker.ready;
-  const resp = await fetch(`${BACKEND_URL}/api/push-key`, { signal: AbortSignal.timeout(15000) });
+  const resp = await fetch(`${BACKEND_URL}/api/push-key`, { signal: timeoutSignal(15000) });
   if (!resp.ok) throw new Error("serveur injoignable");
   const { publicKey } = await resp.json();
   if (!publicKey) throw new Error("clé VAPID absente");
@@ -1615,7 +1622,7 @@ async function subscribeToPush() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(sub.toJSON()),
-    signal: AbortSignal.timeout(10000),
+    signal: timeoutSignal(10000),
   });
   if (!r2.ok) throw new Error("abonnement refusé");
   return true;
@@ -1680,24 +1687,26 @@ function updateNotifUI() {
   const toggle = $("#notifToggle");
   const hint = $("#notifHint");
   if (!toggle) return;
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+  toggle.disabled = false;
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
     toggle.checked = false; toggle.disabled = true;
     if (hint) hint.textContent = "Non supporté sur ce navigateur.";
     return;
   }
   if (isIOS() && !isStandalone()) {
-    toggle.checked = false;
+    toggle.checked = false; toggle.disabled = true;
     if (hint) hint.textContent = "📲 Installe TEM sur l'écran d'accueil pour activer.";
     return;
   }
   if (Notification.permission === "denied") {
     toggle.checked = false;
+    if (state.settings.notifEnabled) { state.settings.notifEnabled = false; saveState({ silent: true }); }
     if (hint) hint.textContent = "❌ Bloquées — Réglages iPhone → TEM → Notifications.";
     return;
   }
   const on = !!state.settings.notifEnabled && Notification.permission === "granted";
   toggle.checked = on;
-  if (hint) hint.textContent = on ? "✅ Rappels actifs : matin, midi et soir." : "Reçois 3 petits rappels motivants par jour.";
+  if (hint) hint.textContent = on ? "✅ Rappels actifs : matin et soir." : "Reçois 2 petits rappels motivants par jour.";
 }
 
 function debounce(fn, wait = 250) {
