@@ -176,6 +176,7 @@ function bindGlobalEvents() {
   $("#exportBtn").addEventListener("click", exportData);
   $("#importInput").addEventListener("change", importData);
   $("#resetBtn").addEventListener("click", resetApp);
+  $("#openGuideBtn").addEventListener("click", openGuideSheet);
 
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 
@@ -1368,6 +1369,46 @@ function openChangePasswordSheet({ enabling = false } = {}) {
     renderAll();
     toast("Mot de passe sauvegardé.");
   });
+}
+
+function openGuideSheet() {
+  openSheet(`
+    <div class="sheet-title-row">
+      <div><p class="eyebrow">Aide</p><h2>Guide d'utilisation</h2></div>
+      <button class="close-btn" data-close aria-label="Fermer">×</button>
+    </div>
+    <div class="guide">
+      <p class="guide-intro">TEM transforme tes rêves en petites actions quotidiennes. Une fourmi, un pas chaque jour. 🐜</p>
+
+      <h3>La méthode en 4 temps</h3>
+      <ol class="guide-list">
+        <li><b>Pose ta vision</b> — les images de la vie que tu veux.</li>
+        <li><b>Découpe en objectifs</b> — objectif → étapes → actions.</li>
+        <li><b>Choisis ton Top 3</b> chaque matin — 3 actions, pas plus.</li>
+        <li><b>Coche</b> et regarde ton score grimper.</li>
+      </ol>
+
+      <h3>Les onglets</h3>
+      <div class="guide-tab"><span>✦</span><div><b>Vision</b> — ton mur d'inspiration. Appuie pour agrandir, glisse pour réorganiser, appui long pour supprimer. Relie une photo à un objectif : elle devient ton <i>pourquoi</i>.</div></div>
+      <div class="guide-tab"><span>◇</span><div><b>Objectifs</b> — un grand domaine, avec son <i>pourquoi</i>, ses étapes et ses actions. Touche ★ pour marquer une action prioritaire.</div></div>
+      <div class="guide-tab"><span>✓</span><div><b>Actions</b> — coche tout ce que tu fais. Les paliers d'un objectif déclenchent des célébrations.</div></div>
+      <div class="guide-tab"><span>⚡</span><div><b>Top 3</b> — ton rituel du jour, max 3 actions. L'app s'ouvre directement ici.</div></div>
+      <div class="guide-tab"><span>☾</span><div><b>Nid</b> — notes, rituels rapides, et ton bilan de la semaine (spécial le dimanche).</div></div>
+      <div class="guide-tab"><span>⚙</span><div><b>Réglages</b> — mot de passe, export et import de tes données.</div></div>
+
+      <h3>Ce qui te tient motivée</h3>
+      <p class="muted">Le score animé, le streak 🔥 (entretenu dès que tu choisis ton Top 3), les confettis aux étapes clés, et l'étoile ★ pour tes priorités.</p>
+
+      <h3>Installer sur ton iPhone</h3>
+      <p class="muted">Dans Safari : bouton Partager → « Sur l'écran d'accueil ». TEM devient une vraie app avec l'icône 🐜.</p>
+
+      <h3>Tes données</h3>
+      <p class="muted">Tout reste sur ton téléphone. Pense à exporter de temps en temps pour garder une sauvegarde.</p>
+
+      <h3>Ton rituel idéal</h3>
+      <p class="muted">Matin : choisis ton Top 3. Journée : coche au fil de l'eau. Soir : un mot dans le Nid. Dimanche : savoure ton bilan. Petite fourmi par petite fourmi. 🐜💗</p>
+    </div>
+  `);
 }
 
 function openSheet(html) {
