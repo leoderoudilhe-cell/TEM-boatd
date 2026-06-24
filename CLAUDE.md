@@ -90,3 +90,13 @@ git add -A && git commit -m "..." && git push
 - Jamais de token/secret dans le code
 - Demander confirmation avant push vers main
 - Images compressées en WebP/JPEG via `compressImage()` (max 1400px, 0.82 quality)
+
+## Journal sécurité / nettoyage
+- **2026-06-25** — Correctif XSS : les URL d'images injectées en `innerHTML`
+  (cartes vision, viewer plein écran) passent désormais par `escapeAttr()`, et
+  l'import JSON est filtré par `sanitizeImported()` (seules les images
+  `data:image/...` sont conservées, `tune` coercé en nombres). Empêche
+  l'injection de `<img onerror>` via un fichier d'import malveillant.
+- **2026-06-25** — `tem-board-deploy-ready.zip` retiré du suivi git (artefact de
+  build, déplacé hors du repo). Libellé notif corrigé (« 3 rappels » → « 2 »,
+  cohérent avec le backend).

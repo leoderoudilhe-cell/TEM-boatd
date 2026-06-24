@@ -765,7 +765,7 @@ function openVisionEditor(id = null) {
       <label class="field"><span>Phrase courte</span><input id="visionSubtitle" value="${escapeAttr(vision?.subtitle || "")}" placeholder="Ex : devenir régulière et fière" /></label>
       <label class="field"><span>Catégorie</span><input id="visionCategory" value="${escapeAttr(vision?.category || "")}" placeholder="Lifestyle, sport, argent..." /></label>
       <label class="upload-box" id="visionUploadBox">
-        ${selectedImageData ? `<img src="${selectedImageData}" alt="">` : `<div><strong>Ajouter une photo</strong><br><span>Appuie pour importer depuis le téléphone</span></div>`}
+        ${selectedImageData ? `<img src="${escapeAttr(selectedImageData)}" alt="">` : `<div><strong>Ajouter une photo</strong><br><span>Appuie pour importer depuis le téléphone</span></div>`}
         <input id="visionImageInput" type="file" accept="image/*" hidden />
       </label>
       <div class="image-tune">
@@ -804,7 +804,7 @@ function openVisionEditor(id = null) {
     try { selectedImageData = await compressImage(file); }
     catch { toast("Impossible de charger cette image."); return; }
     const box = $("#visionUploadBox");
-    box.innerHTML = `<img src="${selectedImageData}" alt=""><input id="visionImageInput" type="file" accept="image/*" hidden />`;
+    box.innerHTML = `<img src="${escapeAttr(selectedImageData)}" alt=""><input id="visionImageInput" type="file" accept="image/*" hidden />`;
   });
 
   $$("#sizePicker button").forEach(btn => {
@@ -864,7 +864,7 @@ function openVisionViewer(id) {
     const v = visions[i];
     const tune = v.tune || { scale: 1, x: 0, y: 0 };
     viewer.innerHTML = `
-      <img class="vision-viewer-img" src="${v.image}" style="transform:scale(${tune.scale}) translate(${tune.x}%,${tune.y}%)" />
+      <img class="vision-viewer-img" src="${escapeAttr(v.image)}" style="transform:scale(${Number(tune.scale)||1}) translate(${Number(tune.x)||0}%,${Number(tune.y)||0}%)" />
       <div class="vision-viewer-overlay"></div>
       <div class="vision-viewer-nav">
         <button class="vision-viewer-btn" id="vvEdit" title="Modifier" aria-label="Modifier">✎</button>
@@ -918,7 +918,7 @@ function openVisionDetail(id) {
       <button class="close-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div class="upload-box">
-      <img src="${vision.image || placeholderSvg(vision.title)}" alt="">
+      <img src="${escapeAttr(vision.image || placeholderSvg(vision.title))}" alt="">
     </div>
     <p class="muted">${escapeHtml(vision.subtitle || "Aucune phrase ajoutée.")}</p>
     ${linked ? `
@@ -1520,12 +1520,31 @@ function exportData() {
   toast("Export téléchargé.");
 }
 
+// Sécurité : neutralise les valeurs dangereuses d'un état importé (anti-XSS).
+// Seules les images en data:image/... sont conservées ; tune coercé en nombres.
+function sanitizeImported(data) {
+  if (!data || typeof data !== "object") return;
+  const safeImg = (img) => (typeof img === "string" && img.startsWith("data:image/")) ? img : "";
+  if (Array.isArray(data.visions)) {
+    data.visions.forEach((v) => {
+      if (!v || typeof v !== "object") return;
+      v.image = safeImg(v.image);
+      if (v.tune && typeof v.tune === "object") {
+        v.tune.scale = Number(v.tune.scale) || 1;
+        v.tune.x = Number(v.tune.x) || 0;
+        v.tune.y = Number(v.tune.y) || 0;
+      }
+    });
+  }
+}
+
 async function importData(e) {
   const file = e.target.files?.[0];
   if (!file) return;
   if (file.size > 50 * 1024 * 1024) { toast("Fichier trop grand (max 50 Mo)."); e.target.value = ""; return; }
   try {
     const parsed = JSON.parse(await file.text());
+    sanitizeImported(parsed);
     state = mergeState(defaultState(), parsed);
     saveState({ silent: true });
     renderAll();
