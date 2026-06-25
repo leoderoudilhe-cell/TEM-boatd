@@ -2,6 +2,10 @@
 
 Web app mobile-first haut de gamme, fond noir + néon rose, pensée pour être ajoutée à l’écran d’accueil.
 
+> **🔒 Mise à jour 25 juin 2026 — sécurité** : faille XSS corrigée (les URL d'images injectées
+> sont échappées, et l'import JSON ne garde que les vraies images `data:image/...`). Libellé notif
+> corrigé (« 3 rappels » → « 2 »). Détails dans `CLAUDE.md` (section Journal sécurité).
+
 ## Fonctionnalités incluses
 
 - PWA installable sur écran d’accueil
