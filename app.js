@@ -2,7 +2,7 @@
 
 const STORAGE_KEY = "tem-board-v1";
 const SESSION_KEY = "tem-unlocked-session-v1";
-const BACKEND_URL = "https://tem-backend.onrender.com"; // backend Web Push (rappels de motivation)
+const BACKEND_URL = ""; // relatif -> /api/* routé par Caddy vers le backend VPS (:3001). (ancien : Render)
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
