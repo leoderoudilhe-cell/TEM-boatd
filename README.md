@@ -27,16 +27,12 @@ Web app mobile-first haut de gamme, fond noir + néon rose, pensée pour être a
 - Export / import JSON
 - Sauvegarde locale dans le navigateur
 
-## Hébergement simple
+## Hébergement
 
-Tu peux héberger le dossier tel quel sur :
+TEM est servi depuis le **VPS Hostinger** via **Caddy** (TLS auto) sur https://temapp.duckdns.org
+(front statique dans `/var/www/temapp`, backend notifs en reverse_proxy sur `localhost:3001`).
 
-- Netlify Drop
-- Vercel
-- GitHub Pages
-- n’importe quel hébergement statique
-
-Aucune compilation n’est nécessaire.
+Le front étant 100 % statique (aucune compilation), le dossier reste portable sur n’importe quel hébergement statique.
 
 ## Important
 

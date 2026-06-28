@@ -2,7 +2,7 @@
 
 ## Projet
 PWA 100% statique (HTML/CSS/JS vanilla). Aucun build, aucun framework, aucune dépendance npm.
-Déployé sur Render Static Site : https://tem-boatd.onrender.com
+Déployé sur le VPS Hostinger, servi par Caddy (TLS auto) : https://temapp.duckdns.org
 GitHub : https://github.com/leoderoudilhe-cell/TEM-boatd (note: "boatd" typo volontaire)
 
 ## Architecture fichiers
@@ -72,17 +72,19 @@ Garder ces mots dans les libellés ; ne pas réintroduire "Pilier" / "Mission" /
 - Icône PWA : PNG fourmi rasterisés depuis l'emoji (canvas), apple-touch-icon = icon-192.png
 
 ## Notifications push (Phase B — backend séparé)
-Backend dédié **tem-backend** (repo privé `leoderoudilhe-cell/tem-backend`, local `/Users/derouds/DEV/tem-backend`) : Node/Express + `web-push`, déployé en Web Service Render. L'app statique l'appelle via la constante `BACKEND_URL` (en haut d'app.js).
+Backend dédié **tem-backend** (repo privé `leoderoudilhe-cell/tem-backend`, local `/Users/derouds/DEV/tem-backend`) : Node/Express + `web-push`, déployé sur le VPS Hostinger (process Node sur le port **3001**, exposé par Caddy en reverse_proxy). L'app statique l'appelle via la constante `BACKEND_URL` (en haut d'app.js).
 - App : toggle "Rappels de motivation" dans Réglages → `toggleNotifications` → `subscribeToPush` (permission, `pushManager.subscribe`, POST `/api/push-subscribe`). Ré-abonnement silencieux au boot si `settings.notifEnabled` + permission `granted`. Garde iOS : actif uniquement en PWA installée (`isStandalone`). `timeoutSignal()` = polyfill d'`AbortSignal.timeout`.
 - `sw.js` : handlers `push` (showNotification) + `notificationclick` (focus/openWindow).
 - Backend : 2 rappels/jour 9h & 19h (heure de Paris via `Intl`), messages en rotation quotidienne, anti-doublon par clé jour+heure **persistée**, abonnements persistés sur GitHub (`data/push-subs.json`, nécessite `GITHUB_TOKEN`). C'est le serveur qui pousse → marche app fermée.
-- Variables d'env Render : `VAPID_PUBLIC` / `VAPID_PRIVATE` (clés dans `tem-backend/VAPID-KEYS.txt`, gitignored), `GITHUB_TOKEN` (persistance), `PUSH_SECRET` (protège `/api/push-test`), `ALLOWED_ORIGINS` (CORS, défaut https://tem-boatd.onrender.com).
+- Variables d'env du backend (sur le VPS) : `PORT` (**3001**), `VAPID_PUBLIC` / `VAPID_PRIVATE` (clés dans `tem-backend/VAPID-KEYS.txt`, gitignored), `GITHUB_TOKEN` (persistance), `PUSH_SECRET` (protège `/api/push-test`), `ALLOWED_ORIGINS` (CORS, défaut https://temapp.duckdns.org).
 - Keepalive : self-ping serveur toutes les 4 min ; pas de cron externe (choix assumé). iOS : requiert PWA installée + permission accordée.
 
 ## Déploiement
 ```bash
 git add -A && git commit -m "..." && git push
-# Render se met à jour automatiquement depuis main
+# Hébergé sur le VPS Hostinger : Caddy sert le front statique depuis /var/www/temapp
+# et reverse_proxy le backend Node (localhost:3001) — TLS auto, https://temapp.duckdns.org
+# TODO: documenter la commande exacte de mise à jour du VPS (git pull / rsync / script de déploiement)
 ```
 
 ## Rules
